@@ -49,7 +49,13 @@ button:disabled{opacity:.4;cursor:not-allowed;box-shadow:none}
 .av{width:34px;height:34px;border-radius:50%;margin:0 auto 4px;display:grid;place-items:center;font-weight:700;color:#fff;background:var(--col);box-shadow:inset 0 -4px 0 rgba(0,0,0,.22),inset 0 3px 0 rgba(255,255,255,.4)}
 .chip.on{transform:translateY(-4px) scale(1.04);border-color:var(--col);box-shadow:0 0 0 2px var(--col),0 0 22px var(--col)}
 .chip.off{opacity:.3}
-.boardwrap{background:linear-gradient(150deg,#5a39c8,#2b1a74);border-radius:24px;padding:10px;box-shadow:0 16px 34px rgba(0,0,0,.5),inset 0 0 0 2px rgba(255,255,255,.14)}
+.d3{position:absolute;left:50%;top:50%;width:0;height:0;pointer-events:none;z-index:5}
+.cw{position:absolute;top:0;width:0;height:0;perspective:700px}
+.cube{position:absolute;left:0;top:0;width:84px;height:84px;margin:-42px 0 0 -42px;transform-style:preserve-3d}
+.cf{position:absolute;inset:0;border-radius:16px;background:linear-gradient(160deg,#fff,#d9d1f5);box-shadow:inset 0 0 0 2px rgba(43,26,116,.18),0 12px 18px rgba(0,0,0,.35);display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);padding:15px;gap:5px;backface-visibility:hidden}
+.cf i{border-radius:50%;background:#2b1a74;visibility:hidden}.cf i.p{visibility:visible}
+.f1{transform:translateZ(42px)}.f6{transform:rotateY(180deg) translateZ(42px)}.f3{transform:rotateY(90deg) translateZ(42px)}.f4{transform:rotateY(-90deg) translateZ(42px)}.f5{transform:rotateX(90deg) translateZ(42px)}.f2{transform:rotateX(-90deg) translateZ(42px)}
+.boardwrap{position:relative;background:linear-gradient(150deg,#5a39c8,#2b1a74);border-radius:24px;padding:10px;box-shadow:0 16px 34px rgba(0,0,0,.5),inset 0 0 0 2px rgba(255,255,255,.14)}
 .boardwrap.shake{animation:shake .38s}
 @keyframes shake{20%{transform:translate(-4px,2px)}40%{transform:translate(4px,-2px)}60%{transform:translate(-3px,-1px)}80%{transform:translate(2px,2px)}}
 svg{display:block;width:100%;height:auto;border-radius:16px}
@@ -124,13 +130,13 @@ function me(){if(!S)return -1;if(isHost)return 0;return S.seats.findIndex(x=>x.p
 // ---- engine (runs on host only) ----
 const SKN={c:'Нүүдэл сонгох',b:'Бүрэн бамбай',r:'Нэмэлт шоо'};
 const prot=(q,j)=>S.sh[q][j]||S.bs[q]||(S.tm&&S.bs[(q+2)%4]);
-const own=seat=>S.tm?[seat,(seat+2)%4]:[seat];
+const own=seat=>S.tm&&S.pc[seat].every(x=>x===56)?[seat,(seat+2)%4]:[seat];
 const mate=(a,b)=>S.tm&&a%2===b%2;
 function legalV(seat,v){const out=[];if(!v)return out;own(seat).forEach(o=>S.pc[o].forEach((p,i)=>{if(p<0?v===6:(p<56&&p+v<=56))out.push(o*4+i)}));return out}
 function combos(seat){const set=new Set(),out=[];S.dv.forEach((v,di)=>legalV(seat,v).forEach(pid=>{const k=v+':'+pid;if(!set.has(k)){set.add(k);out.push({pid,di,v})}}));return out}
 function spawnItems(){let n=0;for(const k of 'cbre'){while(S.it.filter(x=>x.k===k).length<2&&n++<400){const c=rnd(52);if(isSafe(c)||S.it.some(x=>x.c===c))continue;
   if(S.pc.some((r,q)=>r.some(p=>p>=0&&p<=50&&(13*q+p)%52===c)))continue;S.it.push({c,k})}}}
-function nextTurn(note){S.bn=false;S.ex=false;S.dv=[];let t=S.turn;
+function nextTurn(note){S.bn=false;S.ex=false;S.dv=[];S.dd=[0,0];let t=S.turn;
   for(let k=0;k<4;k++){t=(t+1)%4;if(active(S.seats[t].t))break}
   S.turn=t;S.bs[t]=false;S.ph='roll';spawnItems();S.msg=note||''}
 function doRoll(seat){
@@ -148,17 +154,20 @@ function doMove(seat,pid,di){
   const o=pid>>2,i=pid&3,p=S.pc[o][i],np=p<0?0:p+v,nm=S.seats[seat].n||CN[seat];S.dv[di]=0;let cap=false,blk=false;
   if(np<=50){const a=(13*o+np)%52;if(!isSafe(a))for(let q=0;q<4;q++){if(q===o||!active(S.seats[q].t)||mate(q,o))continue;
     S.pc[q].forEach((x,j)=>{if(x>=0&&x<=50&&(13*q+x)%52===a){if(S.bs[q]||(S.tm&&S.bs[(q+2)%4])){blk=true}else if(S.sh[q][j]){S.sh[q][j]=false;blk=true}else{S.pc[q][j]=-1;cap=true}}})}}
-  S.pc[o][i]=np;let got='';
-  if(np<=50){const a=(13*o+np)%52,k=S.it.findIndex(x=>x.c===a);if(k>=0){const w=S.it[k].k;if(w==='e'){S.it.splice(k,1);S.bn=true;S.ex=true;got='e'}else if(S.sk[seat].length<3){got=w;S.sk[seat].push(w);S.it.splice(k,1)}}}
-  if(own(seat).every(q=>S.pc[q].every(x=>x===56))){S.st='over';S.win=seat;S.msg=S.tm?'Баг ялалаа!':nm+' ялалаа!';pub();return}
+  S.pc[o][i]=np;const got=[];let full=false;
+  for(let q=(p<0?0:p+1);q<=Math.min(np,50);q++){const a=(13*o+q)%52;
+    for(let k=S.it.length-1;k>=0;k--){const it=S.it[k];if(it.c!==a)continue;
+      if(it.k==='e'){if(q===np){S.it.splice(k,1);S.bn=true;S.ex=true;got.push('e')}}
+      else if(S.sk[seat].length<3){S.sk[seat].push(it.k);S.it.splice(k,1);got.push(it.k)}else full=true}}
+  if((S.tm?[seat,(seat+2)%4]:[seat]).every(q=>S.pc[q].every(x=>x===56))){S.st='over';S.win=seat;S.msg=S.tm?'Баг ялалаа!':nm+' ялалаа!';pub();return}
   let m=nm+': '+v+' нүүлээ';
   if(cap){S.bn=true;m=nm+' хөл идлээ! Дахин шидэнэ'}
   else if(blk)m=nm+': бамбай хамгаалж, хөл идэгдсэнгүй'; 
-  if(got==='e')m+=' · +1 нүдэнд зогсов, дахин шидэнэ';else if(got)m+=' · '+SKN[got]+' авлаа';
+  got.forEach(w=>{m+=w==='e'?' · +1 нүдэнд зогсов, дахин шидэнэ':' · '+SKN[w]+' авлаа'});if(full)m+=' · ур чадварын хайрцаг дүүрсэн (3)';
   if(np===56){S.bn=true;m+=' · гэртээ орлоо, дахин шидэнэ'}
   else if(S.bn&&!cap&&S.dd.includes(6))m+=' · 6 буусан тул дахин шидэнэ';
   S.msg=m;
-  if(!S.dv.some(x=>x)||!combos(seat).length){if(S.bn){S.ph='roll';S.dv=[]}else nextTurn(m)}
+  if(!S.dv.some(x=>x)||!combos(seat).length){if(S.bn){S.ph='roll';S.dv=[];S.dd=[0,0]}else nextTurn(m)}
   pub();
 }
 function doSkill(seat,a){
@@ -190,7 +199,7 @@ function botSkill(t){
 function plan(){
   clearTimeout(TM);if(!isHost||!S||S.st!=='play')return;
   const t=S.turn,seat=S.seats[t];
-  if(S.ph==='wait')TM=setTimeout(()=>{if(S.bn){S.ph='roll';S.dv=[]}else nextTurn(S.msg);pub()},1300);
+  if(S.ph==='wait')TM=setTimeout(()=>{if(S.bn){S.ph='roll';S.dv=[];S.dd=[0,0]}else nextTurn(S.msg);pub()},1300);
   else if(S.ph==='roll'&&seat.t==='human')TM=setTimeout(()=>doRoll(t),Math.max(0,S.dl-Date.now()));
   else if(S.ph==='roll'&&seat.t==='bot')TM=setTimeout(()=>{if(!botSkill(t))doRoll(t)},900);
   else if(S.ph==='move'){
@@ -339,7 +348,7 @@ function renderLobby(){
     <span class="nm">${S.tm?'<span class="tag">Баг '+(i%2?'B':'A')+'</span> ':''}${x.t==='human'?esc(x.n||'Тоглогч')+(i===m?'<span class="tag">Та</span>':'')+(i===0?'<span class="tag">хост</span>':''):x.t==='bot'?'Бот':'<span style="color:var(--muted)">Хүлээж байна…</span>'}</span>
     ${isHost&&i>0&&x.t!=='human'?`<button class="alt" data-s="${i}">${x.t==='bot'?'Ботыг авах':'Бот нэмэх'}</button>`:''}</div>`).join('')}</div>
   ${err?`<p class="err note">${esc(err)}</p>`:''}
-  ${isHost?`<button class="alt" id="tm">${S.tm?'✓ ':''}2v2 баг: Улаан+Шар vs Ногоон+Цэнхэр</button><p class="note">2v2 горимд хамтрагчийнхаа хөлийг ч нүүлгэж болно (4 суудал бүгд дүүрэх ёстой).</p><button id="go" ${(S.tm?S.seats.filter(x=>active(x.t)).length<4:S.seats.filter(x=>active(x.t)).length<2)?'disabled':''}>Тоглоом эхлүүлэх</button>`:`<p>Хост тоглоомыг эхлүүлэхийг хүлээж байна… ${m<0?'<span class="err">(суудал олдсонгүй)</span>':''}</p>`}`;
+  ${isHost?`<button class="alt" id="tm">${S.tm?'✓ ':''}2v2 баг: Улаан+Шар vs Ногоон+Цэнхэр</button><p class="note">2v2 горимд 4 хөлөө гэртээ оруулсан тоглогч хамтрагчийнхаа хөлийг нүүлгэнэ. Баг 8 хөлөө оруулвал ялна (4 суудал бүгд дүүрэх ёстой).</p><button id="go" ${(S.tm?S.seats.filter(x=>active(x.t)).length<4:S.seats.filter(x=>active(x.t)).length<2)?'disabled':''}>Тоглоом эхлүүлэх</button>`:`<p>Хост тоглоомыг эхлүүлэхийг хүлээж байна… ${m<0?'<span class="err">(суудал олдсонгүй)</span>':''}</p>`}`;
   app.querySelectorAll('button[data-s]').forEach(b=>b.onclick=()=>{const k=+b.dataset.s;S.seats[k].t=S.seats[k].t==='bot'?'empty':'bot';pub()});
   if($('#shr'))$('#shr').onclick=async()=>{const u=$('#lnk').value;try{if(navigator.share){await navigator.share({title:'Ludo',text:'Ludo тоглоцгооё! Өрөө '+S.code,url:u});return}}catch(e){}
     try{await navigator.clipboard.writeText(u);$('#shr').textContent='Хууллаа'}catch(e){$('#lnk').select();$('#shr').textContent='Сонголоо'}};
@@ -364,7 +373,7 @@ function buildBoard(){
   return h+'<g id="fx"></g></svg>';
 }
 // ---- animation helpers ----
-let disp=null,animT=null,prevIt=[],overFx=false;
+let disp=null,animT=null,prevIt=[],overFx=false,lastDd=[0,0];
 const ITC={c:'#8b5cf6',b:'#3b98ff',r:'#ff8f1f',e:'#2fd979'};
 function layout(){
   const groups={};
@@ -397,9 +406,24 @@ function confetti(){if(reduce)return;const box=document.createElement('div');box
   const cs=['#ff5547','#2fd979','#ffc629','#3b98ff','#fff'];
   for(let k=0;k<80;k++){const e=document.createElement('i');e.style.left=Math.random()*100+'%';e.style.background=cs[k%5];e.style.animationDuration=(2.4+Math.random()*2.4)+'s';e.style.animationDelay=Math.random()*.8+'s';box.appendChild(e)}
   document.body.appendChild(box);setTimeout(()=>box.remove(),6500)}
-function setPips(d,v){d.querySelectorAll('i').forEach((e,k)=>e.classList.toggle('p',pipMap[v].includes(k)))}
-function rollAnim(){document.querySelectorAll('#bar .die').forEach((d,di)=>{const fin=S.dd[di];if(!fin||d.classList.contains('q'))return;d.classList.add('shake');let n=0;
-  const iv=setInterval(()=>{if(!d.isConnected)return clearInterval(iv);if(++n>7){clearInterval(iv);setPips(d,fin);d.classList.remove('shake');d.classList.add('land');return}setPips(d,1+rnd(6))},65)})}
+function setPips(d,v){d.querySelectorAll('i').forEach((e,k)=>e.classList.toggle('p',(pipMap[v]||[]).includes(k)))}
+function rollAnim(rolled){document.querySelectorAll('#bar .die').forEach((d,di)=>{if(!rolled[di]||d.classList.contains('q'))return;const fin=S.dd[di];setPips(d,0);
+  setTimeout(()=>{if(!d.isConnected)return;setPips(d,fin);d.classList.add('land')},1000)})}
+const FA={1:[0,0],6:[0,180],3:[0,-90],4:[0,90],5:[-90,0],2:[90,0]};
+function rollCubes(rolled){const box=$('#d3');if(!box||reduce)return;const idx=[];rolled.forEach((r,i)=>{if(r)idx.push(i)});
+  idx.forEach((di,n)=>{const v=S.dd[di],fa=FA[v],fx=fa[0],fy=fa[1],off=idx.length>1?(n?1:-1)*52:0;
+    const cw=document.createElement('div');cw.className='cw';cw.style.left=off+'px';const c=document.createElement('div');c.className='cube';cw.appendChild(c);
+    c.innerHTML=[1,2,3,4,5,6].map(f=>'<div class="cf f'+f+'">'+[0,1,2,3,4,5,6,7,8].map(k=>'<i'+(pipMap[f].includes(k)?' class="p"':'')+'></i>').join('')+'</div>').join('');
+    box.appendChild(cw);
+    const R=(x,y)=>'rotateX('+x+'deg) rotateY('+y+'deg)';
+    c.animate([{transform:'translateY(-190px) scale(.5) '+R(fx+720+rnd(2)*360,fy+1080+rnd(2)*360)},
+      {transform:'translateY(-60px) scale(.9) '+R(fx+540,fy+720),offset:.3},
+      {transform:'translateY(14px) scale(1.15) '+R(fx+180,fy+360),offset:.6},
+      {transform:'translateY(-34px) scale(1.05) '+R(fx+60,fy+90),offset:.78},
+      {transform:'translateY(0) scale(1) '+R(fx,fy),offset:1}],{duration:1000,easing:'ease-out',fill:'forwards'});
+    cw.animate([{opacity:0},{opacity:1}],{duration:200,fill:'forwards'});
+    setTimeout(()=>{cw.animate([{opacity:1,transform:'translateY(0)'},{opacity:0,transform:'translateY(24px)'}],{duration:300,fill:'forwards'})},1350);
+    setTimeout(()=>cw.remove(),1700)})}
 let selDie=0,pend=null,canNow=new Set(),localDl=0;
 function onPiece(s,i){
   const m=me(),pid=s*4+i;if(m<0||!S||S.st!=='play')return;
@@ -412,7 +436,8 @@ function renderGame(){
     app.innerHTML=`<div class="players" id="pl"></div><div class="boardwrap" id="bw"></div><div class="status" id="stt"></div><div class="tmr"><i id="tb"></i></div><div class="bar" id="bar"></div><div class="skills" id="sk"></div><div id="end"></div>`;
     $('#bw').innerHTML=buildBoard();boardBuilt=true;
     pieceEls=[0,1,2,3].map(s=>[0,1,2,3].map(i=>{const e=$('#pc'+s+i);e.addEventListener('click',()=>onPiece(s,i));return e}));
-    disp=S.pc.map(r=>r.slice());layout();prevIt=[];overFx=false;
+    disp=S.pc.map(r=>r.slice());layout();prevIt=[];overFx=false;lastDd=S.dd.slice();lastRid=S.rid;
+    $('#bw').insertAdjacentHTML('beforeend','<div class="d3" id="d3"></div>');
   }
   const playing=S.st==='play',myTurn=playing&&S.turn===m;
   localDl=playing&&S.dl?(isHost?S.dl:Date.now()+(S.dl-S.hn)):0;
@@ -456,7 +481,8 @@ function renderGame(){
   $('#bar').style.setProperty('--turn',m>=0?COL[m]:'var(--ink)');
   $('#bar').innerHTML='<div class="dice">'+[0,1].filter(di=>di===0||S.dd[1]>0).map(di=>`<button class="dieb ${S.dv[di]===0&&S.dd[di]?'used':''} ${myTurn&&S.ph==='move'&&selDie===di&&S.dv[di]?'sel':''}" data-di="${di}" aria-label="Шоо ${di+1}" ${myTurn&&S.ph==='move'&&S.dv[di]?'':'disabled'}>${dieHTML(S.dd[di],false)}</button>`).join('')+`</div><button id="roll" ${mine?'':'disabled'}>${mine?'Шоо хаях':S.st==='over'?'Дууслаа':'Хүлээнэ үү'}</button>`;
   $('#roll').onclick=()=>act({k:'roll'});
-  if(tumble&&S.dd[0]>0)rollAnim();
+  const rolled=S.dd.map((v,i)=>v>0&&lastDd[i]!==v);lastDd=S.dd.slice();
+  if(tumble&&rolled.some(Boolean)){rollCubes(rolled);rollAnim(rolled)}
   document.querySelectorAll('.dieb').forEach(b=>b.onclick=()=>{const d=+b.dataset.di;if(S.dv[d]&&legalV(m,S.dv[d]).length){selDie=d;renderGame()}});
   // skills
   const hand=m>=0&&S.sk[m]?S.sk[m]:[];
@@ -466,7 +492,7 @@ function renderGame(){
   if(playing&&m>=0&&pend==='c'&&myTurn)$('#sk').insertAdjacentHTML('beforeend','<div class="pick">'+[1,2,3,4,5,6].map(v=>`<button data-v="${v}">${v}</button>`).join('')+'</div>');
   document.querySelectorAll('.pick button').forEach(b=>b.onclick=()=>{act({k:'skill',s:'c',v:+b.dataset.v});pend=null});
   document.querySelectorAll('#sk>button').forEach(b=>b.onclick=()=>{const k=b.dataset.k;if(k==='r'||k==='b'){act({k:'skill',s:k})}else{pend=pend===k?null:k;renderGame()}});
-  $('#end').innerHTML=playing?`<p class="note">Самбар дээр төрөл бүр 2-2 тэмдэг гарна. Хөлөөрөө тэр нүдэнд буувал авна (3 хүртэл хадгална). Нүүдэл сонгох: 1-6 дотроос хүссэн нүүдлээ сонгоно. Бүрэн бамбай: бүх хөлийг нэг тойрог хамгаална. Нэмэлт шоо: хоёр дахь шоо нэмнэ. Ногоон +1 нүдэнд зогсвол шууд дахин шидэнэ. Нэг ээлжид 10 секунд, хугацаа хэтэрвэл автоматаар нүүнэ. 6 буусан, хөл идсэн, гэртээ орсон бол дахин шидэнэ.</p>`:S.st==='over'?(isHost?'<div class="row"><button id="again">Дахин тоглох</button><button class="alt" id="quit">Гарах</button></div>':'<p>Хост дахин эхлүүлэхийг хүлээж байна…</p>'):'';
+  $('#end').innerHTML=playing?`<p class="note">Самбар дээр төрөл бүр 2-2 тэмдэг гарна. Хөлөөрөө тэр нүдэн дээр буух эсвэл дайран өнгөрвөл авна (3 хүртэл хадгална, дүүрвэл авахгүй). Нүүдэл сонгох: 1-6 дотроос хүссэн нүүдлээ сонгоно. Бүрэн бамбай: бүх хөлийг нэг тойрог хамгаална. Нэмэлт шоо: хоёр дахь шоо нэмнэ. Ногоон +1 нүдэнд яг зогсвол шууд дахин шидэнэ. 2v2: 4 хөлөө оруулсны дараа хамтрагчийнхаа хөлийг нүүлгэнэ. Нэг ээлжид 10 секунд, хугацаа хэтэрвэл автоматаар нүүнэ. 6 буусан, хөл идсэн, гэртээ орсон бол дахин шидэнэ.</p>`:S.st==='over'?(isHost?'<div class="row"><button id="again">Дахин тоглох</button><button class="alt" id="quit">Гарах</button></div>':'<p>Хост дахин эхлүүлэхийг хүлээж байна…</p>'):'';
   if(S.st==='over'){if($('#again'))$('#again').onclick=()=>{S.seats.forEach(x=>{if(x.t==='off')x.t='empty'});startGame()};if($('#quit'))$('#quit').onclick=()=>location.reload()}
 }
 setInterval(()=>{const b=$('#tb');if(!b)return;if(!localDl||!S||S.st!=='play'){b.style.width='0';return}
