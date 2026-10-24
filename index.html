@@ -93,11 +93,13 @@ svg{display:block;width:100%;height:auto;border-radius:16px}
 .confetti{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:20}
 .confetti i{position:absolute;top:-20px;width:9px;height:14px;border-radius:2px;animation:fall linear forwards}
 @keyframes fall{to{transform:translateY(110vh) rotate(720deg)}}
+button.snd{position:fixed;right:max(10px,env(safe-area-inset-right,0px));bottom:calc(10px + env(safe-area-inset-bottom,0px));z-index:30;padding:7px 11px;font-size:12px;border-radius:999px;background:rgba(20,12,60,.75);backdrop-filter:blur(6px)}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
 <div class="app" id="app"></div>
+<button class="alt snd" id="snd" type="button"></button>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script>
 (function(){
@@ -143,17 +145,21 @@ function doRoll(seat){
   if(!S||S.st!=='play'||S.ph!=='roll'||S.turn!==seat)return;
   let a=1+rnd(6);if(a===6&&S.six>=3)a=1+rnd(5);S.six=a===6?S.six+1:0;const nm=S.seats[seat].n||CN[seat];
   S.dd=[a,0];S.dv=[a,0];S.rid++;S.bn=a===6;let m=nm+': '+a+' буулаа';
-  if(!combos(seat).length){S.ph='wait';m+=', нүүх хөл алга'}else S.ph='move';
+  if(!combos(seat).length){S.ph='wait';S.bn=false;m+=', нүүх хөл алга, ээлж дамжлаа'}else S.ph='move';
   S.msg=m;pub();
 }
-function wouldCapture(o,np){if(np>50)return false;const a=(13*o+np)%52;if(isSafe(a))return false;
-  for(let q=0;q<4;q++){if(q===o||!active(S.seats[q].t)||mate(q,o))continue;if(S.pc[q].some((x,j)=>x>=0&&x<=50&&(13*q+x)%52===a&&!prot(q,j)))return true}return false}
+function victims(o,np){const out=[];let blocked=false;if(np>50)return{out,blocked};const a=(13*o+np)%52;if(isSafe(a))return{out,blocked};
+  const g={};for(let q=0;q<4;q++){if(q===o||!active(S.seats[q].t)||mate(q,o))continue;
+    S.pc[q].forEach((x,j)=>{if(x>=0&&x<=50&&(13*q+x)%52===a){const t=S.tm?q%2:q;(g[t]=g[t]||[]).push([q,j])}})}
+  Object.values(g).forEach(l=>{if(l.length>=2){blocked=true;return}const q=l[0][0],j=l[0][1];
+    if(S.bs[q]||(S.tm&&S.bs[(q+2)%4]))blocked=true;else if(S.sh[q][j]){blocked=true;out.push({q,j,sh:true})}else out.push({q,j})});
+  return{out,blocked}}
+function wouldCapture(o,np){return victims(o,np).out.some(x=>!x.sh)}
 function doMove(seat,pid,di){
   if(!S||S.st!=='play'||S.ph!=='move'||S.turn!==seat)return;
   const v=S.dv[di];if(!v||!legalV(seat,v).includes(pid))return;
   const o=pid>>2,i=pid&3,p=S.pc[o][i],np=p<0?0:p+v,nm=S.seats[seat].n||CN[seat];S.dv[di]=0;let cap=false,blk=false;
-  if(np<=50){const a=(13*o+np)%52;if(!isSafe(a))for(let q=0;q<4;q++){if(q===o||!active(S.seats[q].t)||mate(q,o))continue;
-    S.pc[q].forEach((x,j)=>{if(x>=0&&x<=50&&(13*q+x)%52===a){if(S.bs[q]||(S.tm&&S.bs[(q+2)%4])){blk=true}else if(S.sh[q][j]){S.sh[q][j]=false;blk=true}else{S.pc[q][j]=-1;cap=true}}})}}
+  const vv=victims(o,np);vv.out.forEach(x=>{if(x.sh){S.sh[x.q][x.j]=false;blk=true}else{S.pc[x.q][x.j]=-1;cap=true}});if(vv.blocked)blk=true;
   S.pc[o][i]=np;const got=[];let full=false;
   for(let q=np;q<=Math.min(np,50);q++){const a=(13*o+q)%52;
     for(let k=S.it.length-1;k>=0;k--){const it=S.it[k];if(it.c!==a)continue;
@@ -162,9 +168,9 @@ function doMove(seat,pid,di){
   if((S.tm?[seat,(seat+2)%4]:[seat]).every(q=>S.pc[q].every(x=>x===56))){S.st='over';S.win=seat;S.msg=S.tm?'Баг ялалаа!':nm+' ялалаа!';pub();return}
   let m=nm+': '+v+' нүүлээ';
   if(cap){S.bn=true;m=nm+' хөл идлээ! Дахин шидэнэ'}
-  else if(blk)m=nm+': бамбай хамгаалж, хөл идэгдсэнгүй'; 
+  else if(blk)m=nm+': дайсны хөл хамгаалагдсан тул идэж чадсангүй';
   got.forEach(w=>{m+=w==='e'?' · +1 нүдэнд зогсов, дахин шидэнэ':' · '+SKN[w]+' авлаа'});
-  if(np===56){S.bn=true;m+=' · гэртээ орлоо, дахин шидэнэ'}
+  if(np===56){S.bn=true;m+=' · гэртээ орлоо, дахин шидэнэ';if(S.tm&&o===seat&&S.pc[o].every(x=>x===56))m+=' · 4 хөлөө оруулав, одоо хамтрагчдаа тусална'}
   else if(S.bn&&!cap&&S.dd.includes(6))m+=' · 6 буусан тул дахин шидэнэ';
   S.msg=m;
   if(!S.dv.some(x=>x)||!combos(seat).length){if(S.bn){S.ph='roll';S.dv=[];S.dd=[0,0]}else nextTurn(m)}
@@ -177,7 +183,7 @@ function doSkill(seat,a){
     const old=S.ph==='move'?S.dd[0]:0;if(v===6&&S.six>=3&&old!==6)return false;
     if(!(S.ph==='roll'||(S.ph==='move'&&S.dd[1]===0&&S.dv[0]>0&&S.dv[0]===S.dd[0])))return false;
     if(old===6)S.six=Math.max(0,S.six-1);S.six=v===6?S.six+1:0;
-    S.dd=[v,0];S.dv=[v,0];S.rid++;S.bn=v===6||!!S.ex;S.msg=nm+': '+v+' нүүдлийг сонголоо';S.ph=combos(seat).length?'move':'wait'}
+    S.dd=[v,0];S.dv=[v,0];S.rid++;S.bn=v===6||!!S.ex;S.msg=nm+': '+v+' нүүдлийг сонголоо';S.ph=combos(seat).length?'move':(S.bn=false,'wait')}
   else if(a.s==='b'){if(S.bs[seat])return false;S.bs[seat]=true;S.msg=nm+': бүх хөлөө бамбайлаж, нэг тойрог хамгаалагдлаа'}
   else if(a.s==='r'){if(S.ph!=='move'||S.dd[1]!==0||!S.dv[0])return false;
     let y=1+rnd(6);if(y===6&&S.six>=3)y=1+rnd(5);if(y===6)S.six++;S.dd[1]=y;S.dv[1]=y;S.rid++;S.bn=S.bn||y===6;S.msg=nm+': нэмэлт шоо '+y+' буулаа'}
@@ -374,6 +380,16 @@ function buildBoard(){
   for(let s=0;s<4;s++)for(let i=0;i<4;i++)h+=`<g class="piece" id="pc${s}${i}"><ellipse rx=".3" ry=".1" cy=".36" fill="#000" opacity=".3"/><g class="pb"><path d="M-.2,.3 C-.2,.08 -.07,.02 -.07,-.1 H.07 C.07,.02 .2,.08 .2,.3Z" fill="url(#p${s})" stroke="#000" stroke-opacity=".4" stroke-width=".04"/><ellipse cy=".3" rx=".27" ry=".09" fill="url(#g${s})" stroke="#000" stroke-opacity=".4" stroke-width=".04"/><circle cy="-.22" r=".17" fill="url(#p${s})" stroke="#000" stroke-opacity=".4" stroke-width=".04"/><circle class="shd" cy="-.02" r=".52"/><circle class="ring" cy="-.02" r=".52"/></g><circle r=".6" fill="transparent"/></g>`;
   return h+'<g id="fx"></g></svg>';
 }
+// ---- sound (synthesized, no files) ----
+let AC=null,muted=false;try{muted=localStorage.getItem('ludoMute')==='1'}catch(e){}
+function ac(){if(!AC){try{AC=new (window.AudioContext||window.webkitAudioContext)()}catch(e){}}if(AC&&AC.state==='suspended')AC.resume().catch(()=>{});return AC}
+function tone(f,t0,d,type,vol,f2){const c=ac();if(!c||muted)return;const T0=c.currentTime+t0,o=c.createOscillator(),g=c.createGain();o.type=type||'sine';o.frequency.setValueAtTime(f,T0);if(f2)o.frequency.exponentialRampToValueAtTime(f2,T0+d);
+  g.gain.setValueAtTime(.0001,T0);g.gain.exponentialRampToValueAtTime(vol||.15,T0+.012);g.gain.exponentialRampToValueAtTime(.0001,T0+d);o.connect(g);g.connect(c.destination);o.start(T0);o.stop(T0+d+.03)}
+const SFX={step:()=>tone(480+Math.random()*80,0,.08,'triangle',.14,300),roll:()=>{for(let k=0;k<8;k++)tone(180+Math.random()*320,k*.09,.05,'square',.05)},land:()=>{tone(150,0,.14,'sine',.25,70)},
+  cap:()=>{tone(320,0,.28,'sawtooth',.12,60);tone(90,0,.2,'sine',.25)},pick:()=>{tone(660,0,.08,'sine',.16);tone(990,.08,.14,'sine',.16)},home:()=>{tone(784,0,.1,'triangle',.16);tone(1175,.1,.22,'triangle',.16)},
+  win:()=>[523,659,784,1046,1319].forEach((f,k)=>tone(f,k*.13,.28,'triangle',.18))};
+document.addEventListener('pointerdown',()=>{ac()});
+function sndBtn(){const b=$('#snd');if(b)b.textContent=muted?'Дуу: унтраалттай':'Дуу: асаалттай'}
 // ---- animation helpers ----
 let disp=null,animT=null,prevIt=[],overFx=false,lastDd=[0,0];
 const ITC={c:'#8b5cf6',b:'#3b98ff',r:'#ff8f1f',e:'#2fd979'};
@@ -399,8 +415,8 @@ function stepAnim(){
     if(t<0){caps.push([s,i]);continue}
     moved=true;
     if(Math.abs(t-d)>14||t<d)disp[s][i]=t;else if(d<0)disp[s][i]=0;else disp[s][i]=d+1;
-    hop(pieceEls[s][i])}
-  if(!moved&&caps.length){caps.forEach(([s,i])=>{const q=pos(s,disp[s][i],i);burst(q[0],q[1],'#ff5547',10);disp[s][i]=-1});shake()}
+    hop(pieceEls[s][i]);SFX.step();if(disp[s][i]===56)setTimeout(SFX.home,120)}
+  if(!moved&&caps.length){caps.forEach(([s,i])=>{const q=pos(s,disp[s][i],i);burst(q[0],q[1],'#ff5547',10);SFX.cap();disp[s][i]=-1});shake()}
   layout();
   if(needsAnim())animT=setTimeout(stepAnim,135);
 }
@@ -466,9 +482,9 @@ function renderGame(){
     e:['#2f9e55','<text y=".14" text-anchor="middle" font-size=".4" font-weight="700" fill="#fff">+1</text>']};
   $('#items').innerHTML=(S.it||[]).map(x=>{const c=T[x.c],v=IC[x.k];return `<g transform="translate(${c[0]+.5},${c[1]+.5})"><circle r=".4" fill="${v[0]}" stroke="#fff" stroke-width=".07"><animate attributeName="r" values=".37;.43;.37" dur="1.6s" repeatCount="indefinite"/></circle>${v[1]}</g>`}).join('');
   for(let s=0;s<4;s++){const q=$('#q'+s);if(q)q.classList.toggle('on',playing&&S.turn===s)}
-  (prevIt||[]).forEach(o=>{if(!(S.it||[]).some(x=>x.c===o.c&&x.k===o.k)){const c=T[o.c];burst(c[0]+.5,c[1]+.5,ITC[o.k]||'#fff',8)}});
+  (prevIt||[]).forEach(o=>{if(!(S.it||[]).some(x=>x.c===o.c&&x.k===o.k)){const c=T[o.c];burst(c[0]+.5,c[1]+.5,ITC[o.k]||'#fff',8);SFX.pick()}});
   prevIt=(S.it||[]).map(x=>({c:x.c,k:x.k}));
-  if(S.st==='over'){if(!overFx){overFx=true;confetti()}}else overFx=false;
+  if(S.st==='over'){if(!overFx){overFx=true;confetti();SFX.win()}}else overFx=false;
   // status
   const tname=S.seats[S.turn].n||CN[S.turn];let line='';
   if(S.st==='over')line=`<b style="color:${COL[S.win]}">${S.tm?'Баг '+(S.win%2?'B':'A')+' ('+esc(S.seats[S.win].n||CN[S.win])+' ба хамтрагч) ялалаа!':esc(S.seats[S.win].n||CN[S.win])+' ялалаа!'}</b>`;
@@ -484,7 +500,7 @@ function renderGame(){
   $('#bar').innerHTML='<div class="dice">'+[0,1].filter(di=>di===0||S.dd[1]>0).map(di=>`<button class="dieb ${S.dv[di]===0&&S.dd[di]?'used':''} ${myTurn&&S.ph==='move'&&selDie===di&&S.dv[di]?'sel':''}" data-di="${di}" aria-label="Шоо ${di+1}" ${myTurn&&S.ph==='move'&&S.dv[di]?'':'disabled'}>${dieHTML(S.dd[di],false)}</button>`).join('')+`</div><button id="roll" ${mine?'':'disabled'}>${mine?'Шоо хаях':S.st==='over'?'Дууслаа':'Хүлээнэ үү'}</button>`;
   $('#roll').onclick=()=>act({k:'roll'});
   const rolled=S.dd.map((v,i)=>v>0&&lastDd[i]!==v);lastDd=S.dd.slice();
-  if(tumble&&rolled.some(Boolean)){rollCubes(rolled);rollAnim(rolled)}
+  if(tumble&&rolled.some(Boolean)){rollCubes(rolled);rollAnim(rolled);SFX.roll();setTimeout(SFX.land,950)}
   document.querySelectorAll('.dieb').forEach(b=>b.onclick=()=>{const d=+b.dataset.di;if(S.dv[d]&&legalV(m,S.dv[d]).length){selDie=d;renderGame()}});
   // skills
   const hand=m>=0&&S.sk[m]?S.sk[m]:[];
@@ -494,7 +510,7 @@ function renderGame(){
   if(playing&&m>=0&&pend==='c'&&myTurn)$('#sk').insertAdjacentHTML('beforeend','<div class="pick">'+[1,2,3,4,5,6].map(v=>`<button data-v="${v}">${v}</button>`).join('')+'</div>');
   document.querySelectorAll('.pick button').forEach(b=>b.onclick=()=>{act({k:'skill',s:'c',v:+b.dataset.v});pend=null});
   document.querySelectorAll('#sk>button').forEach(b=>b.onclick=()=>{const k=b.dataset.k;if(k==='r'||k==='b'){act({k:'skill',s:k})}else{pend=pend===k?null:k;renderGame()}});
-  $('#end').innerHTML=playing?`<p class="note">Самбар дээр ур чадварын тэмдэг 2-2, ногоон +1 нь 4 ширхэг гарна. Хөлөөрөө тэр нүдэнд яг зогсвол авна, дайран өнгөрвөл авахгүй (хэдэн ч хадгалж болно). Нүүдэл сонгох: 1-6 дотроос хүссэн нүүдлээ сонгоно. Бүрэн бамбай: бүх хөлийг нэг тойрог хамгаална. Нэмэлт шоо: хоёр дахь шоо нэмнэ. Ногоон +1 нүдэнд зогсвол шууд дахин шидэнэ. 2v2: 4 хөлөө оруулсны дараа хамтрагчийнхаа хөлийг нүүлгэнэ. Нэг ээлжид 10 секунд, хугацаа хэтэрвэл автоматаар нүүнэ. 6 буусан, хөл идсэн, гэртээ орсон бол дахин шидэнэ. Дараалан хамгийн ихдээ 3 удаа 6 буух ба 4 дэх удаад 6 буухгүй.</p>`:S.st==='over'?(isHost?'<div class="row"><button id="again">Дахин тоглох</button><button class="alt" id="quit">Гарах</button></div>':'<p>Хост дахин эхлүүлэхийг хүлээж байна…</p>'):'';
+  $('#end').innerHTML=playing?`<p class="note">Самбар дээр ур чадварын тэмдэг 2-2, ногоон +1 нь 4 ширхэг гарна. Хөлөөрөө тэр нүдэнд яг зогсвол авна, дайран өнгөрвөл авахгүй (хэдэн ч хадгалж болно). Нүүдэл сонгох: 1-6 дотроос хүссэн нүүдлээ сонгоно. Бүрэн бамбай: бүх хөлийг нэг тойрог хамгаална. Нэмэлт шоо: хоёр дахь шоо нэмнэ. Ногоон +1 нүдэнд зогсвол шууд дахин шидэнэ. 2v2: 4 хөлөө оруулсны дараа хамтрагчийнхаа хөлийг нүүлгэнэ. Нэг тоглогч (2v2-д баг) 2 хөлөө нэг нүдэнд байлгавал дайсан идэж чадахгүй. Хөл гэртээ орох яг тоо буухгүй бол 6 ч гэсэн ээлж дамжина. Нэг ээлжид 10 секунд, хугацаа хэтэрвэл автоматаар нүүнэ. 6 буусан, хөл идсэн, гэртээ орсон бол дахин шидэнэ. Дараалан хамгийн ихдээ 3 удаа 6 буух ба 4 дэх удаад 6 буухгүй.</p>`:S.st==='over'?(isHost?'<div class="row"><button id="again">Дахин тоглох</button><button class="alt" id="quit">Гарах</button></div>':'<p>Хост дахин эхлүүлэхийг хүлээж байна…</p>'):'';
   if(S.st==='over'){if($('#again'))$('#again').onclick=()=>{S.seats.forEach(x=>{if(x.t==='off')x.t='empty'});startGame()};if($('#quit'))$('#quit').onclick=()=>location.reload()}
 }
 setInterval(()=>{const b=$('#tb');if(!b)return;if(!localDl||!S||S.st!=='play'){b.style.width='0';return}
@@ -502,6 +518,7 @@ setInterval(()=>{const b=$('#tb');if(!b)return;if(!localDl||!S||S.st!=='play'){b
 // stale host notice
 setInterval(()=>{if(!isHost&&S&&lastState&&Date.now()-lastState>9000&&!$('#lost')){const d=document.createElement('p');d.id='lost';d.className='err note';d.textContent='Хостоос дохио ирэхгүй байна. Холболт тасарсан байж магадгүй.';app.appendChild(d)}
   else if(!isHost&&Date.now()-lastState<9000&&$('#lost'))$('#lost').remove()},2000);
+$('#snd').onclick=()=>{muted=!muted;try{localStorage.setItem('ludoMute',muted?'1':'0')}catch(e){}sndBtn();if(!muted)SFX.pick()};sndBtn();
 render();
 })();
 </script>
