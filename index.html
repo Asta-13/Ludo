@@ -93,13 +93,14 @@ svg{display:block;width:100%;height:auto;border-radius:16px}
 .confetti{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:20}
 .confetti i{position:absolute;top:-20px;width:9px;height:14px;border-radius:2px;animation:fall linear forwards}
 @keyframes fall{to{transform:translateY(110vh) rotate(720deg)}}
-button.snd{position:fixed;right:max(10px,env(safe-area-inset-right,0px));bottom:calc(10px + env(safe-area-inset-bottom,0px));z-index:30;padding:7px 11px;font-size:12px;border-radius:999px;background:rgba(20,12,60,.75);backdrop-filter:blur(6px)}
+.snds{position:fixed;right:max(10px,env(safe-area-inset-right,0px));bottom:calc(10px + env(safe-area-inset-bottom,0px));z-index:30;display:flex;gap:6px}
+.snds button{padding:7px 11px;font-size:12px;border-radius:999px;background:rgba(20,12,60,.78);backdrop-filter:blur(6px)}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
 <div class="app" id="app"></div>
-<button class="alt snd" id="snd" type="button"></button>
+<div class="snds"><button class="alt" id="snd" type="button"></button><button class="alt" id="mus" type="button"></button></div>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script>
 (function(){
@@ -131,7 +132,7 @@ const active=t=>t==='human'||t==='bot';
 function me(){if(!S)return -1;if(isHost)return 0;return S.seats.findIndex(x=>x.peer&&x.peer===myPeer)}
 // ---- engine (runs on host only) ----
 const SKN={c:'Нүүдэл сонгох',b:'Бүрэн бамбай',r:'Нэмэлт шоо'};
-const prot=(q,j)=>S.sh[q][j]||S.bs[q]||(S.tm&&S.bs[(q+2)%4]);
+const prot=(q,j)=>S.sh[q][j]||S.bs[q];
 const own=seat=>S.tm&&S.pc[seat].every(x=>x===56)?[seat,(seat+2)%4]:[seat];
 const mate=(a,b)=>S.tm&&a%2===b%2;
 function legalV(seat,v){const out=[];if(!v)return out;own(seat).forEach(o=>S.pc[o].forEach((p,i)=>{if(p<0?v===6:(p<56&&p+v<=56))out.push(o*4+i)}));return out}
@@ -152,7 +153,7 @@ function victims(o,np){const out=[];let blocked=false;if(np>50)return{out,blocke
   const g={};for(let q=0;q<4;q++){if(q===o||!active(S.seats[q].t)||mate(q,o))continue;
     S.pc[q].forEach((x,j)=>{if(x>=0&&x<=50&&(13*q+x)%52===a){const t=S.tm?q%2:q;(g[t]=g[t]||[]).push([q,j])}})}
   Object.values(g).forEach(l=>{if(l.length>=2){blocked=true;return}const q=l[0][0],j=l[0][1];
-    if(S.bs[q]||(S.tm&&S.bs[(q+2)%4]))blocked=true;else if(S.sh[q][j]){blocked=true;out.push({q,j,sh:true})}else out.push({q,j})});
+    if(S.bs[q])blocked=true;else if(S.sh[q][j]){blocked=true;out.push({q,j,sh:true})}else out.push({q,j})});
   return{out,blocked}}
 function wouldCapture(o,np){return victims(o,np).out.some(x=>!x.sh)}
 function doMove(seat,pid,di){
@@ -380,18 +381,61 @@ function buildBoard(){
   for(let s=0;s<4;s++)for(let i=0;i<4;i++)h+=`<g class="piece" id="pc${s}${i}"><ellipse rx=".3" ry=".1" cy=".36" fill="#000" opacity=".3"/><g class="pb"><path d="M-.2,.3 C-.2,.08 -.07,.02 -.07,-.1 H.07 C.07,.02 .2,.08 .2,.3Z" fill="url(#p${s})" stroke="#000" stroke-opacity=".4" stroke-width=".04"/><ellipse cy=".3" rx=".27" ry=".09" fill="url(#g${s})" stroke="#000" stroke-opacity=".4" stroke-width=".04"/><circle cy="-.22" r=".17" fill="url(#p${s})" stroke="#000" stroke-opacity=".4" stroke-width=".04"/><circle class="shd" cy="-.02" r=".52"/><circle class="ring" cy="-.02" r=".52"/></g><circle r=".6" fill="transparent"/></g>`;
   return h+'<g id="fx"></g></svg>';
 }
-// ---- sound (synthesized, no files) ----
-let AC=null,muted=false;try{muted=localStorage.getItem('ludoMute')==='1'}catch(e){}
-function ac(){if(!AC){try{AC=new (window.AudioContext||window.webkitAudioContext)()}catch(e){}}if(AC&&AC.state==='suspended')AC.resume().catch(()=>{});return AC}
-function tone(f,t0,d,type,vol,f2){const c=ac();if(!c||muted)return;const T0=c.currentTime+t0,o=c.createOscillator(),g=c.createGain();o.type=type||'sine';o.frequency.setValueAtTime(f,T0);if(f2)o.frequency.exponentialRampToValueAtTime(f2,T0+d);
-  g.gain.setValueAtTime(.0001,T0);g.gain.exponentialRampToValueAtTime(vol||.15,T0+.012);g.gain.exponentialRampToValueAtTime(.0001,T0+d);o.connect(g);g.connect(c.destination);o.start(T0);o.stop(T0+d+.03)}
-const SFX={step:()=>tone(480+Math.random()*80,0,.08,'triangle',.14,300),roll:()=>{for(let k=0;k<8;k++)tone(180+Math.random()*320,k*.09,.05,'square',.05)},land:()=>{tone(150,0,.14,'sine',.25,70)},
-  cap:()=>{tone(320,0,.28,'sawtooth',.12,60);tone(90,0,.2,'sine',.25)},pick:()=>{tone(660,0,.08,'sine',.16);tone(990,.08,.14,'sine',.16)},home:()=>{tone(784,0,.1,'triangle',.16);tone(1175,.1,.22,'triangle',.16)},
-  win:()=>[523,659,784,1046,1319].forEach((f,k)=>tone(f,k*.13,.28,'triangle',.18))};
-document.addEventListener('pointerdown',()=>{ac()});
-function sndBtn(){const b=$('#snd');if(b)b.textContent=muted?'Дуу: унтраалттай':'Дуу: асаалттай'}
+// ---- sound + music (all synthesized in the browser, no audio files) ----
+let AC=null,muted=false,music=true,SG=null,MG=null,musicOn=false,mTimer=null,mNext=0,mStep=0,mIdx=3,NB=null,stepIdx=0,stepT=0;
+try{muted=localStorage.getItem('ludoMute')==='1';music=localStorage.getItem('ludoMusic')!=='0'}catch(e){}
+const m2f=m=>440*Math.pow(2,(m-69)/12);
+function ac(){
+  if(!AC){try{AC=new (window.AudioContext||window.webkitAudioContext)();
+    const len=Math.floor(AC.sampleRate*2.4),buf=AC.createBuffer(2,len,AC.sampleRate);
+    for(let c=0;c<2;c++){const d=buf.getChannelData(c);for(let i=0;i<len;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/len,2.8)}
+    const rev=AC.createConvolver();rev.buffer=buf;rev.connect(AC.destination);
+    SG=AC.createGain();SG.gain.value=.85;SG.connect(AC.destination);const sw=AC.createGain();sw.gain.value=.18;SG.connect(sw);sw.connect(rev);
+    MG=AC.createGain();MG.gain.value=0;MG.connect(AC.destination);const mw=AC.createGain();mw.gain.value=.55;MG.connect(mw);mw.connect(rev);
+    NB=AC.createBuffer(1,AC.sampleRate*.5,AC.sampleRate);const nd=NB.getChannelData(0);for(let i=0;i<nd.length;i++)nd[i]=Math.random()*2-1;
+  }catch(e){AC=null}}
+  if(AC&&AC.state==='suspended')AC.resume().catch(()=>{});
+  return AC}
+function osc(type,f,t,d,vol,dest,att,f2){const c=AC,o=c.createOscillator(),g=c.createGain();o.type=type;o.frequency.setValueAtTime(f,t);if(f2)o.frequency.exponentialRampToValueAtTime(f2,t+d);
+  g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(vol,t+(att||.008));g.gain.exponentialRampToValueAtTime(.0001,t+d);o.connect(g);g.connect(dest);o.start(t);o.stop(t+d+.05)}
+function bell(m,t0,vol,dur,dest){const c=ac();if(!c||(dest===SG&&muted))return;const t=c.currentTime+(t0||0),f=m2f(m),d=dur||1.1,o=dest||SG;
+  osc('sine',f,t,d,vol,o);osc('sine',f*2.76,t,d*.35,vol*.22,o);osc('triangle',f*.5,t,d*.5,vol*.25,o)}
+function pluck(m,t0,vol){const c=ac();if(!c||muted)return;const t=c.currentTime+(t0||0),f=m2f(m);osc('sine',f,t,.28,vol,SG);osc('sine',f*4,t,.07,vol*.35,SG)}
+function noise(t0,d,f,q,vol,type){const c=ac();if(!c||muted||!NB)return;const t=c.currentTime+t0,s=c.createBufferSource(),fl=c.createBiquadFilter(),g=c.createGain();
+  s.buffer=NB;fl.type=type||'bandpass';fl.frequency.value=f;fl.Q.value=q;g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(.0001,t+d);s.connect(fl);fl.connect(g);g.connect(SG);s.start(t);s.stop(t+d+.02)}
+const SC=[72,74,76,79,81,84,86,88];
+const SFX={
+  step:()=>{const n=performance.now();if(n-stepT>520)stepIdx=0;stepT=n;pluck(SC[Math.min(stepIdx,SC.length-1)]-12+12,0,.11);stepIdx++},
+  roll:()=>{for(let k=0;k<9;k++)noise(k*.085+Math.random()*.03,.05,1500+Math.random()*1800,3,.16);},
+  land:()=>{const c=ac();if(!c||muted)return;osc('sine',190,c.currentTime,.16,.34,SG,.004,70);noise(0,.06,500,.8,.2,'lowpass')},
+  cap:()=>{const c=ac();if(!c||muted)return;const t=c.currentTime;osc('sine',420,t,.38,.2,SG,.01,110);osc('sine',90,t,.25,.3,SG,.005,50);noise(0,.1,900,.7,.12,'lowpass')},
+  pickK:k=>{
+    if(k==='c'){[76,79,83,88].forEach((m,i)=>bell(m,i*.07,.13,.7))}
+    else if(k==='b'){[55,62,67].forEach(m=>{const c=ac();if(c&&!muted)osc('sine',m2f(m),c.currentTime,.9,.12,SG,.12)});bell(91,.15,.1,.9)}
+    else if(k==='r'){noise(0,.03,3200,4,.18);noise(.07,.03,3600,4,.18);bell(84,.14,.12,.6);bell(88,.22,.12,.7)}
+    else if(k==='e'){bell(83,0,.15,.5);bell(88,.1,.16,.9)}
+    else {bell(79,0,.13,.6);bell(84,.08,.13,.8)}},
+  home:()=>{[72,76,79,84].forEach((m,i)=>bell(m,i*.09,.13,.9))},
+  win:()=>{[[72,76,79,84],[74,77,81,86],[76,79,83,88],[79,83,86,91]].forEach((ch,i)=>ch.forEach(m=>bell(m,i*.32,.1,1.6)))},
+  turn:()=>bell(79,0,.09,.5)};
+// background music: slow, warm, pentatonic. Generated live.
+const CH=[[48,55,59,64],[45,52,55,60],[41,48,52,57],[43,50,59,64]];
+function pad(ch,t,d){ch.forEach((m,i)=>{const f=m2f(m+(i?12:0));osc('sine',f,t,d,i?.05:.09,MG,d*.35);osc('triangle',f*1.004,t,d,.018,MG,d*.4)})}
+function mTick(){const c=AC;if(!c||!musicOn)return;const beat=.74;
+  while(mNext<c.currentTime+1.4){const bar=Math.floor(mStep/8)%4,e=mStep%8;
+    if(e===0)pad(CH[bar],mNext,beat*4.2);
+    if(Math.random()<(e%2===0?.55:.3)){mIdx=Math.max(0,Math.min(5,mIdx+[-2,-1,-1,0,1,1,2][Math.floor(Math.random()*7)]));
+      const m=[72,74,76,79,81,84][mIdx],t=mNext-c.currentTime;
+      const dst=MG,f=m2f(m),T=mNext;osc('sine',f,T,1.6,.06+Math.random()*.03,dst,.01);osc('sine',f*2,T,.5,.012,dst,.01)}
+    mNext+=beat/2;mStep++}}
+function startMusic(){if(!music||musicOn)return;const c=ac();if(!c)return;musicOn=true;mNext=c.currentTime+.15;mStep=0;
+  MG.gain.cancelScheduledValues(c.currentTime);MG.gain.setValueAtTime(MG.gain.value,c.currentTime);MG.gain.linearRampToValueAtTime(.55,c.currentTime+3);mTick();mTimer=setInterval(mTick,250)}
+function stopMusic(){if(!musicOn||!AC)return;musicOn=false;clearInterval(mTimer);MG.gain.cancelScheduledValues(AC.currentTime);MG.gain.setValueAtTime(MG.gain.value,AC.currentTime);MG.gain.linearRampToValueAtTime(0,AC.currentTime+.6)}
+document.addEventListener('pointerdown',()=>{ac();startMusic()});
+document.addEventListener('visibilitychange',()=>{if(!AC)return;if(document.hidden)AC.suspend().catch(()=>{});else AC.resume().catch(()=>{})});
+function sndBtn(){const a=$('#snd'),b=$('#mus');if(a)a.textContent=muted?'Дуу: унтраалттай':'Дуу: асаалттай';if(b)b.textContent=music?'Хөгжим: асаалттай':'Хөгжим: унтраалттай'}
 // ---- animation helpers ----
-let disp=null,animT=null,prevIt=[],overFx=false,lastDd=[0,0];
+let wasMine=false,disp=null,animT=null,prevIt=[],overFx=false,lastDd=[0,0];
 const ITC={c:'#8b5cf6',b:'#3b98ff',r:'#ff8f1f',e:'#2fd979'};
 function layout(){
   const groups={};
@@ -482,7 +526,7 @@ function renderGame(){
     e:['#2f9e55','<text y=".14" text-anchor="middle" font-size=".4" font-weight="700" fill="#fff">+1</text>']};
   $('#items').innerHTML=(S.it||[]).map(x=>{const c=T[x.c],v=IC[x.k];return `<g transform="translate(${c[0]+.5},${c[1]+.5})"><circle r=".4" fill="${v[0]}" stroke="#fff" stroke-width=".07"><animate attributeName="r" values=".37;.43;.37" dur="1.6s" repeatCount="indefinite"/></circle>${v[1]}</g>`}).join('');
   for(let s=0;s<4;s++){const q=$('#q'+s);if(q)q.classList.toggle('on',playing&&S.turn===s)}
-  (prevIt||[]).forEach(o=>{if(!(S.it||[]).some(x=>x.c===o.c&&x.k===o.k)){const c=T[o.c];burst(c[0]+.5,c[1]+.5,ITC[o.k]||'#fff',8);SFX.pick()}});
+  (prevIt||[]).forEach(o=>{if(!(S.it||[]).some(x=>x.c===o.c&&x.k===o.k)){const c=T[o.c];burst(c[0]+.5,c[1]+.5,ITC[o.k]||'#fff',8);SFX.pickK(o.k)}});
   prevIt=(S.it||[]).map(x=>({c:x.c,k:x.k}));
   if(S.st==='over'){if(!overFx){overFx=true;confetti();SFX.win()}}else overFx=false;
   // status
@@ -495,7 +539,7 @@ function renderGame(){
   $('#stt').innerHTML=line+(S.msg&&playing?`<small>${esc(S.msg)}</small>`:'');
   // dice + roll
   const tumble=S.rid!==lastRid&&S.st==='play';lastRid=S.rid;
-  const mine=myTurn&&S.ph==='roll';
+  const mine=myTurn&&S.ph==='roll';if(mine&&!wasMine)SFX.turn();wasMine=mine;
   $('#bar').style.setProperty('--turn',m>=0?COL[m]:'var(--ink)');
   $('#bar').innerHTML='<div class="dice">'+[0,1].filter(di=>di===0||S.dd[1]>0).map(di=>`<button class="dieb ${S.dv[di]===0&&S.dd[di]?'used':''} ${myTurn&&S.ph==='move'&&selDie===di&&S.dv[di]?'sel':''}" data-di="${di}" aria-label="Шоо ${di+1}" ${myTurn&&S.ph==='move'&&S.dv[di]?'':'disabled'}>${dieHTML(S.dd[di],false)}</button>`).join('')+`</div><button id="roll" ${mine?'':'disabled'}>${mine?'Шоо хаях':S.st==='over'?'Дууслаа':'Хүлээнэ үү'}</button>`;
   $('#roll').onclick=()=>act({k:'roll'});
@@ -510,7 +554,7 @@ function renderGame(){
   if(playing&&m>=0&&pend==='c'&&myTurn)$('#sk').insertAdjacentHTML('beforeend','<div class="pick">'+[1,2,3,4,5,6].map(v=>`<button data-v="${v}">${v}</button>`).join('')+'</div>');
   document.querySelectorAll('.pick button').forEach(b=>b.onclick=()=>{act({k:'skill',s:'c',v:+b.dataset.v});pend=null});
   document.querySelectorAll('#sk>button').forEach(b=>b.onclick=()=>{const k=b.dataset.k;if(k==='r'||k==='b'){act({k:'skill',s:k})}else{pend=pend===k?null:k;renderGame()}});
-  $('#end').innerHTML=playing?`<p class="note">Самбар дээр ур чадварын тэмдэг 2-2, ногоон +1 нь 4 ширхэг гарна. Хөлөөрөө тэр нүдэнд яг зогсвол авна, дайран өнгөрвөл авахгүй (хэдэн ч хадгалж болно). Нүүдэл сонгох: 1-6 дотроос хүссэн нүүдлээ сонгоно. Бүрэн бамбай: бүх хөлийг нэг тойрог хамгаална. Нэмэлт шоо: хоёр дахь шоо нэмнэ. Ногоон +1 нүдэнд зогсвол шууд дахин шидэнэ. 2v2: 4 хөлөө оруулсны дараа хамтрагчийнхаа хөлийг нүүлгэнэ. Нэг тоглогч (2v2-д баг) 2 хөлөө нэг нүдэнд байлгавал дайсан идэж чадахгүй. Хөл гэртээ орох яг тоо буухгүй бол 6 ч гэсэн ээлж дамжина. Нэг ээлжид 10 секунд, хугацаа хэтэрвэл автоматаар нүүнэ. 6 буусан, хөл идсэн, гэртээ орсон бол дахин шидэнэ. Дараалан хамгийн ихдээ 3 удаа 6 буух ба 4 дэх удаад 6 буухгүй.</p>`:S.st==='over'?(isHost?'<div class="row"><button id="again">Дахин тоглох</button><button class="alt" id="quit">Гарах</button></div>':'<p>Хост дахин эхлүүлэхийг хүлээж байна…</p>'):'';
+  $('#end').innerHTML=playing?`<p class="note">Самбар дээр ур чадварын тэмдэг 2-2, ногоон +1 нь 4 ширхэг гарна. Хөлөөрөө тэр нүдэнд яг зогсвол авна, дайран өнгөрвөл авахгүй (хэдэн ч хадгалж болно). Нүүдэл сонгох: 1-6 дотроос хүссэн нүүдлээ сонгоно. Бүрэн бамбай: зөвхөн өөрийн бүх хөлийг нэг тойрог хамгаална (хамтрагчийнхыг биш). Нэмэлт шоо: хоёр дахь шоо нэмнэ. Ногоон +1 нүдэнд зогсвол шууд дахин шидэнэ. 2v2: 4 хөлөө оруулсны дараа хамтрагчийнхаа хөлийг нүүлгэнэ. Нэг тоглогч (2v2-д баг) 2 хөлөө нэг нүдэнд байлгавал дайсан идэж чадахгүй. Хөл гэртээ орох яг тоо буухгүй бол 6 ч гэсэн ээлж дамжина. Нэг ээлжид 10 секунд, хугацаа хэтэрвэл автоматаар нүүнэ. 6 буусан, хөл идсэн, гэртээ орсон бол дахин шидэнэ. Дараалан хамгийн ихдээ 3 удаа 6 буух ба 4 дэх удаад 6 буухгүй.</p>`:S.st==='over'?(isHost?'<div class="row"><button id="again">Дахин тоглох</button><button class="alt" id="quit">Гарах</button></div>':'<p>Хост дахин эхлүүлэхийг хүлээж байна…</p>'):'';
   if(S.st==='over'){if($('#again'))$('#again').onclick=()=>{S.seats.forEach(x=>{if(x.t==='off')x.t='empty'});startGame()};if($('#quit'))$('#quit').onclick=()=>location.reload()}
 }
 setInterval(()=>{const b=$('#tb');if(!b)return;if(!localDl||!S||S.st!=='play'){b.style.width='0';return}
@@ -518,7 +562,8 @@ setInterval(()=>{const b=$('#tb');if(!b)return;if(!localDl||!S||S.st!=='play'){b
 // stale host notice
 setInterval(()=>{if(!isHost&&S&&lastState&&Date.now()-lastState>9000&&!$('#lost')){const d=document.createElement('p');d.id='lost';d.className='err note';d.textContent='Хостоос дохио ирэхгүй байна. Холболт тасарсан байж магадгүй.';app.appendChild(d)}
   else if(!isHost&&Date.now()-lastState<9000&&$('#lost'))$('#lost').remove()},2000);
-$('#snd').onclick=()=>{muted=!muted;try{localStorage.setItem('ludoMute',muted?'1':'0')}catch(e){}sndBtn();if(!muted)SFX.pick()};sndBtn();
+$('#snd').onclick=()=>{muted=!muted;try{localStorage.setItem('ludoMute',muted?'1':'0')}catch(e){}sndBtn();if(!muted)SFX.pickK('e')};
+$('#mus').onclick=()=>{music=!music;try{localStorage.setItem('ludoMusic',music?'1':'0')}catch(e){}sndBtn();if(music){ac();startMusic()}else stopMusic()};sndBtn();
 render();
 })();
 </script>
