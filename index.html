@@ -136,12 +136,12 @@ function legalV(seat,v){const out=[];if(!v)return out;own(seat).forEach(o=>S.pc[
 function combos(seat){const set=new Set(),out=[];S.dv.forEach((v,di)=>legalV(seat,v).forEach(pid=>{const k=v+':'+pid;if(!set.has(k)){set.add(k);out.push({pid,di,v})}}));return out}
 function spawnItems(){let n=0;for(const k of 'cbre'){while(S.it.filter(x=>x.k===k).length<(k==='e'?4:2)&&n++<400){const c=rnd(52);if(isSafe(c)||S.it.some(x=>x.c===c))continue;
   if(S.pc.some((r,q)=>r.some(p=>p>=0&&p<=50&&(13*q+p)%52===c)))continue;S.it.push({c,k})}}}
-function nextTurn(note){S.bn=false;S.ex=false;S.dv=[];S.dd=[0,0];let t=S.turn;
+function nextTurn(note){S.bn=false;S.ex=false;S.six=0;S.dv=[];S.dd=[0,0];let t=S.turn;
   for(let k=0;k<4;k++){t=(t+1)%4;if(active(S.seats[t].t))break}
   S.turn=t;S.bs[t]=false;S.ph='roll';spawnItems();S.msg=note||''}
 function doRoll(seat){
   if(!S||S.st!=='play'||S.ph!=='roll'||S.turn!==seat)return;
-  const a=1+rnd(6),nm=S.seats[seat].n||CN[seat];
+  let a=1+rnd(6);if(a===6&&S.six>=3)a=1+rnd(5);S.six=a===6?S.six+1:0;const nm=S.seats[seat].n||CN[seat];
   S.dd=[a,0];S.dv=[a,0];S.rid++;S.bn=a===6;let m=nm+': '+a+' буулаа';
   if(!combos(seat).length){S.ph='wait';m+=', нүүх хөл алга'}else S.ph='move';
   S.msg=m;pub();
@@ -155,7 +155,7 @@ function doMove(seat,pid,di){
   if(np<=50){const a=(13*o+np)%52;if(!isSafe(a))for(let q=0;q<4;q++){if(q===o||!active(S.seats[q].t)||mate(q,o))continue;
     S.pc[q].forEach((x,j)=>{if(x>=0&&x<=50&&(13*q+x)%52===a){if(S.bs[q]||(S.tm&&S.bs[(q+2)%4])){blk=true}else if(S.sh[q][j]){S.sh[q][j]=false;blk=true}else{S.pc[q][j]=-1;cap=true}}})}}
   S.pc[o][i]=np;const got=[];let full=false;
-  for(let q=(p<0?0:p+1);q<=Math.min(np,50);q++){const a=(13*o+q)%52;
+  for(let q=np;q<=Math.min(np,50);q++){const a=(13*o+q)%52;
     for(let k=S.it.length-1;k>=0;k--){const it=S.it[k];if(it.c!==a)continue;
       if(it.k==='e'){if(q===np){S.it.splice(k,1);S.bn=true;S.ex=true;got.push('e')}}
       else{S.sk[seat].push(it.k);S.it.splice(k,1);got.push(it.k)}}}
@@ -174,11 +174,13 @@ function doSkill(seat,a){
   if(!S||S.st!=='play'||S.turn!==seat||(S.ph!=='roll'&&S.ph!=='move'))return false;
   const k=S.sk[seat].indexOf(a.s);if(k<0)return false;const nm=S.seats[seat].n||CN[seat];
   if(a.s==='c'){const v=a.v|0;if(v<1||v>6)return false;
+    const old=S.ph==='move'?S.dd[0]:0;if(v===6&&S.six>=3&&old!==6)return false;
     if(!(S.ph==='roll'||(S.ph==='move'&&S.dd[1]===0&&S.dv[0]>0&&S.dv[0]===S.dd[0])))return false;
+    if(old===6)S.six=Math.max(0,S.six-1);S.six=v===6?S.six+1:0;
     S.dd=[v,0];S.dv=[v,0];S.rid++;S.bn=v===6||!!S.ex;S.msg=nm+': '+v+' нүүдлийг сонголоо';S.ph=combos(seat).length?'move':'wait'}
   else if(a.s==='b'){if(S.bs[seat])return false;S.bs[seat]=true;S.msg=nm+': бүх хөлөө бамбайлаж, нэг тойрог хамгаалагдлаа'}
   else if(a.s==='r'){if(S.ph!=='move'||S.dd[1]!==0||!S.dv[0])return false;
-    const y=1+rnd(6);S.dd[1]=y;S.dv[1]=y;S.rid++;S.bn=S.bn||y===6;S.msg=nm+': нэмэлт шоо '+y+' буулаа'}
+    let y=1+rnd(6);if(y===6&&S.six>=3)y=1+rnd(5);if(y===6)S.six++;S.dd[1]=y;S.dv[1]=y;S.rid++;S.bn=S.bn||y===6;S.msg=nm+': нэмэлт шоо '+y+' буулаа'}
   else return false;
   S.sk[seat].splice(k,1);pub();return true;
 }
@@ -208,7 +210,7 @@ function plan(){
   }
 }
 function startGame(){
-  S.st='play';S.pc=[0,1,2,3].map(()=>[-1,-1,-1,-1]);S.sh=[0,1,2,3].map(()=>[false,false,false,false]);S.sk=[[],[],[],[]];S.bs=[false,false,false,false];
+  S.st='play';S.six=0;S.pc=[0,1,2,3].map(()=>[-1,-1,-1,-1]);S.sh=[0,1,2,3].map(()=>[false,false,false,false]);S.sk=[[],[],[],[]];S.bs=[false,false,false,false];
   S.dv=[];S.dd=[0,0];S.bn=false;S.win=-1;S.it=[];spawnItems();S.msg='';S.ph='roll';
   S.seats.forEach(x=>{if(x.t==='empty')x.t='off'});
   let t=0;while(!active(S.seats[t].t))t++;S.turn=t;pub();
@@ -292,7 +294,7 @@ function newGame(mode){
   const solo=mode!=='online';
   isHost=true;
   S={code:String(1000+rnd(9000)),seats:[{t:'human',n:name,peer:''},{t:solo?'bot':'empty',n:'',peer:''},{t:solo?'bot':'empty',n:'',peer:''},{t:solo?'bot':'empty',n:'',peer:''}],
-     st:'lobby',tm:mode==='team',turn:0,ph:'roll',dd:[0,0],dv:[],pc:[],sh:[],sk:[],it:[],bs:[false,false,false,false],dl:0,hn:0,bn:false,msg:'',win:-1,seq:0,rid:0};
+     st:'lobby',tm:mode==='team',turn:0,ph:'roll',dd:[0,0],dv:[],pc:[],sh:[],sk:[],it:[],bs:[false,false,false,false],six:0,dl:0,hn:0,bn:false,msg:'',win:-1,seq:0,rid:0};
   if(solo){startGame();return}
   render();hostRoom();
 }
@@ -492,7 +494,7 @@ function renderGame(){
   if(playing&&m>=0&&pend==='c'&&myTurn)$('#sk').insertAdjacentHTML('beforeend','<div class="pick">'+[1,2,3,4,5,6].map(v=>`<button data-v="${v}">${v}</button>`).join('')+'</div>');
   document.querySelectorAll('.pick button').forEach(b=>b.onclick=()=>{act({k:'skill',s:'c',v:+b.dataset.v});pend=null});
   document.querySelectorAll('#sk>button').forEach(b=>b.onclick=()=>{const k=b.dataset.k;if(k==='r'||k==='b'){act({k:'skill',s:k})}else{pend=pend===k?null:k;renderGame()}});
-  $('#end').innerHTML=playing?`<p class="note">Самбар дээр ур чадварын тэмдэг 2-2, ногоон +1 нь 4 ширхэг гарна. Хөлөөрөө тэр нүдэн дээр буух эсвэл дайран өнгөрвөл авна (хэдэн ч хадгалж болно). Нүүдэл сонгох: 1-6 дотроос хүссэн нүүдлээ сонгоно. Бүрэн бамбай: бүх хөлийг нэг тойрог хамгаална. Нэмэлт шоо: хоёр дахь шоо нэмнэ. Ногоон +1 нүдэнд яг зогсвол шууд дахин шидэнэ. 2v2: 4 хөлөө оруулсны дараа хамтрагчийнхаа хөлийг нүүлгэнэ. Нэг ээлжид 10 секунд, хугацаа хэтэрвэл автоматаар нүүнэ. 6 буусан, хөл идсэн, гэртээ орсон бол дахин шидэнэ.</p>`:S.st==='over'?(isHost?'<div class="row"><button id="again">Дахин тоглох</button><button class="alt" id="quit">Гарах</button></div>':'<p>Хост дахин эхлүүлэхийг хүлээж байна…</p>'):'';
+  $('#end').innerHTML=playing?`<p class="note">Самбар дээр ур чадварын тэмдэг 2-2, ногоон +1 нь 4 ширхэг гарна. Хөлөөрөө тэр нүдэнд яг зогсвол авна, дайран өнгөрвөл авахгүй (хэдэн ч хадгалж болно). Нүүдэл сонгох: 1-6 дотроос хүссэн нүүдлээ сонгоно. Бүрэн бамбай: бүх хөлийг нэг тойрог хамгаална. Нэмэлт шоо: хоёр дахь шоо нэмнэ. Ногоон +1 нүдэнд зогсвол шууд дахин шидэнэ. 2v2: 4 хөлөө оруулсны дараа хамтрагчийнхаа хөлийг нүүлгэнэ. Нэг ээлжид 10 секунд, хугацаа хэтэрвэл автоматаар нүүнэ. 6 буусан, хөл идсэн, гэртээ орсон бол дахин шидэнэ. Дараалан хамгийн ихдээ 3 удаа 6 буух ба 4 дэх удаад 6 буухгүй.</p>`:S.st==='over'?(isHost?'<div class="row"><button id="again">Дахин тоглох</button><button class="alt" id="quit">Гарах</button></div>':'<p>Хост дахин эхлүүлэхийг хүлээж байна…</p>'):'';
   if(S.st==='over'){if($('#again'))$('#again').onclick=()=>{S.seats.forEach(x=>{if(x.t==='off')x.t='empty'});startGame()};if($('#quit'))$('#quit').onclick=()=>location.reload()}
 }
 setInterval(()=>{const b=$('#tb');if(!b)return;if(!localDl||!S||S.st!=='play'){b.style.width='0';return}
