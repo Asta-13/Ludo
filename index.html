@@ -12,7 +12,8 @@
   --c0:#ff5547;--c1:#2fd979;--c2:#ffc629;--c3:#3b98ff;--accent:#ffc629;--accent2:#ff8f1f;
   --display:'Rubik Mono One','Rubik',system-ui,sans-serif;--body:'Rubik',system-ui,sans-serif;color-scheme:dark}
 *{box-sizing:border-box}
-html{background:#0e0a2b}
+html{background:#0e0a2b;-webkit-text-size-adjust:100%}
+body{overflow-x:hidden}
 body{margin:0;min-height:100vh;color:var(--ink);font-family:var(--body);font-size:15px;
   background:#0e0a2b radial-gradient(120% 70% at 50% 0%,#3d2496 0%,#190f45 50%,#0b0722 100%) fixed;
   padding-block:calc(14px + env(safe-area-inset-top,0px)) calc(28px + env(safe-area-inset-bottom,0px));
@@ -25,7 +26,7 @@ h1 span:nth-child(1){color:var(--c0)}h1 span:nth-child(2){color:var(--c1);animat
 p{margin:0;color:var(--muted);line-height:1.45}
 .card{background:var(--glass);border:1px solid var(--line);border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:12px;backdrop-filter:blur(8px)}
 label{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
-input{font:inherit;color:#fff;background:rgba(0,0,0,.28);border:1.5px solid var(--line);border-radius:12px;padding:12px 14px;width:100%;min-width:0}
+input{font:inherit;font-size:16px;color:#fff;background:rgba(0,0,0,.28);border:1.5px solid var(--line);border-radius:12px;padding:12px 14px;width:100%;min-width:0}
 input::placeholder{color:#8f86c4}
 input:focus-visible,button:focus-visible{outline:3px solid #fff;outline-offset:2px}
 button{font:inherit;font-weight:700;border:0;border-radius:14px;padding:13px 16px;cursor:pointer;color:#2a1500;
@@ -113,7 +114,7 @@ function pos(s,p,i){
   const d=DIR[s],o=(i-1.5)*.3;return[7.5+d[0]*.9-d[1]*o,7.5+d[1]*.9+d[0]*o];
 }
 // ---- state ----
-let S=null,isHost=false,R=null,myPeer=null,hostPeer=null,TM=null,lastRid=0,lastState=0,joinTimer=null,err='';
+let netErr='',S=null,isHost=false,R=null,myPeer=null,hostPeer=null,TM=null,lastRid=0,lastState=0,joinTimer=null,err='';
 let myName='';try{myName=localStorage.getItem('ludoName')||''}catch(e){}
 const $=s=>document.querySelector(s);
 const app=$('#app');
@@ -216,28 +217,33 @@ const preRoom=(qs.get('r')||'').replace(/\D/g,'').slice(0,4);
 function newNet(){
   const hs={},pcb=[],conns={};let peer=null,hostConn=null;
   const deliver=(t,d,p)=>(hs[t]||[]).forEach(fn=>fn({topic:t,data:d,peer:p,isMe:false}));
-  const opt=()=>{const b=window.LUDO_BROKER;return b?{host:b.host,port:b.port,path:'/',secure:false}:{}};
+  const ICE={iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'},{urls:'stun:openrelay.metered.ca:80'},
+    {urls:'turn:openrelay.metered.ca:80',username:'openrelayproject',credential:'openrelayproject'},
+    {urls:'turn:openrelay.metered.ca:443',username:'openrelayproject',credential:'openrelayproject'},
+    {urls:'turn:openrelay.metered.ca:443?transport=tcp',username:'openrelayproject',credential:'openrelayproject'}]};
+  const opt=()=>{const b=window.LUDO_BROKER;return Object.assign({config:ICE},b?{host:b.host,port:b.port,path:'/',secure:false}:{})};
   const net={
     on(t,fn){(hs[t]=hs[t]||[]).push(fn)},onPeers(fn){pcb.push(fn)},
     emit(t,d){const m={t,d};try{if(isHost)Object.values(conns).forEach(c=>c.open&&c.send(m));else if(hostConn&&hostConn.open)hostConn.send(m)}catch(e){}return Promise.resolve()},
     host(code){return new Promise(res=>{
       peer=new Peer(PFX+code,opt());
       peer.on('open',()=>res(true));
-      peer.on('error',e=>res(e.type==='unavailable-id'?'taken':false));
+      peer.on('error',e=>{netErr=e.type||'error';res(e.type==='unavailable-id'?'taken':false)});
       peer.on('connection',c=>{
         c.on('open',()=>{conns[c.peer]=c;pcb.forEach(f=>f({left:[],joined:[{peer:c.peer}]}))});
         c.on('data',m=>{if(m&&m.t)deliver(m.t,m.d,c.peer)});
         c.on('close',()=>{delete conns[c.peer];pcb.forEach(f=>f({left:[{peer:c.peer}],joined:[]}))});
       });
-      setTimeout(()=>res(false),9000)})},
+      setTimeout(()=>{netErr=netErr||'broker-timeout';res(false)},12000)})},
     join(code){return new Promise(res=>{
       peer=new Peer(opt());
       peer.on('open',id=>{myPeer=id;hostConn=peer.connect(PFX+code,{reliable:true});
         hostConn.on('open',()=>res(true));
+        hostConn.on('error',e=>{netErr='conn-'+(e.type||'error')});
         hostConn.on('data',m=>{if(m&&m.t)deliver(m.t,m.d,hostConn.peer)});
         hostConn.on('close',()=>{lastState=1});});
-      peer.on('error',e=>res(e.type==='peer-unavailable'?'nohost':false));
-      setTimeout(()=>res(false),10000)})}
+      peer.on('error',e=>{netErr=e.type||'error';res(e.type==='peer-unavailable'?'nohost':false)});
+      setTimeout(()=>{netErr=netErr||(peer&&peer.open?'ice-timeout':'broker-timeout');res(false)},18000)})}
   };
   return net;
 }
@@ -270,7 +276,7 @@ async function hostRoom(){
     if(r==='taken'){S.code=String(1000+rnd(9000));render();continue}
     break;
   }
-  R=null;err='Онлайн сервертэй холбогдож чадсангүй. Интернэтээ шалгана уу. Ботуудтай тоглох боломжтой.';render();
+  R=null;err='Онлайн сервертэй холбогдож чадсангүй ['+netErr+']. Ботуудтай тоглох боломжтой.';render();
 }
 function newGame(mode){
   const name=($('#nm').value.trim()||'Тоглогч').slice(0,12);saveName(name);
@@ -285,9 +291,9 @@ async function joinGame(){
   const name=($('#nm').value.trim()||'Тоглогч').slice(0,12);saveName(name);
   const code=$('#cd').value.replace(/\D/g,'').slice(0,4);
   if(code.length!==4){err='4 оронтой код оруулна уу';render();return}
-  err='Холбогдож байна…';render();
+  err='Холбогдож байна… (15 секунд хүртэл)';render();
   R=newNet();const ok=await R.join(code);
-  if(ok!==true){R=null;err=ok==='nohost'?'Өрөө олдсонгүй. Кодоо шалгана уу.':'Сервертэй холбогдож чадсангүй. Интернэтээ шалгаад дахин оролдоно уу.';render();return}
+  if(ok!==true){R=null;err=ok==='nohost'?'Өрөө олдсонгүй. Кодоо шалгана уу.':'Холбогдож чадсангүй ['+netErr+']. Дахин оролдоно уу.';render();return}
   wire();
   const ask=()=>R.emit('join',{n:name});ask();
   let tries=0;clearInterval(joinTimer);
@@ -320,7 +326,7 @@ function renderMenu(){
   <div class="card"><label for="nm">Таны нэр</label><input id="nm" maxlength="12" placeholder="Жишээ: Бямба" value="${esc(v)}" autocomplete="off">
     <button id="mk">Шинэ өрөө үүсгэх</button><div class="row"><button class="alt" id="solo">Ботуудтай ганцаараа</button><button class="alt" id="team">Ботуудтай 2v2</button></div></div>
   <div class="card"><label for="cd">Найзынхаа өрөөнд орох</label><div class="row"><input id="cd" inputmode="numeric" maxlength="4" placeholder="4 оронтой код" value="${esc(c)}"><button id="jn">Орох</button></div>
-    <p class="note ${err.startsWith('Холбогдож')?'':'err'}">${esc(err)}</p></div>
+    <p class="note ${err.startsWith('Холбогдож байна')?'':'err'}">${esc(err)}</p></div>
   `;
   $('#mk').onclick=()=>{err='';newGame('online')};$('#solo').onclick=()=>{err='';newGame('solo')};$('#team').onclick=()=>{err='';newGame('team')};$('#jn').onclick=joinGame;
 }
