@@ -134,7 +134,7 @@ const own=seat=>S.tm&&S.pc[seat].every(x=>x===56)?[seat,(seat+2)%4]:[seat];
 const mate=(a,b)=>S.tm&&a%2===b%2;
 function legalV(seat,v){const out=[];if(!v)return out;own(seat).forEach(o=>S.pc[o].forEach((p,i)=>{if(p<0?v===6:(p<56&&p+v<=56))out.push(o*4+i)}));return out}
 function combos(seat){const set=new Set(),out=[];S.dv.forEach((v,di)=>legalV(seat,v).forEach(pid=>{const k=v+':'+pid;if(!set.has(k)){set.add(k);out.push({pid,di,v})}}));return out}
-function spawnItems(){let n=0;for(const k of 'cbre'){while(S.it.filter(x=>x.k===k).length<2&&n++<400){const c=rnd(52);if(isSafe(c)||S.it.some(x=>x.c===c))continue;
+function spawnItems(){let n=0;for(const k of 'cbre'){while(S.it.filter(x=>x.k===k).length<(k==='e'?4:2)&&n++<400){const c=rnd(52);if(isSafe(c)||S.it.some(x=>x.c===c))continue;
   if(S.pc.some((r,q)=>r.some(p=>p>=0&&p<=50&&(13*q+p)%52===c)))continue;S.it.push({c,k})}}}
 function nextTurn(note){S.bn=false;S.ex=false;S.dv=[];S.dd=[0,0];let t=S.turn;
   for(let k=0;k<4;k++){t=(t+1)%4;if(active(S.seats[t].t))break}
@@ -158,12 +158,12 @@ function doMove(seat,pid,di){
   for(let q=(p<0?0:p+1);q<=Math.min(np,50);q++){const a=(13*o+q)%52;
     for(let k=S.it.length-1;k>=0;k--){const it=S.it[k];if(it.c!==a)continue;
       if(it.k==='e'){if(q===np){S.it.splice(k,1);S.bn=true;S.ex=true;got.push('e')}}
-      else if(S.sk[seat].length<3){S.sk[seat].push(it.k);S.it.splice(k,1);got.push(it.k)}else full=true}}
+      else{S.sk[seat].push(it.k);S.it.splice(k,1);got.push(it.k)}}}
   if((S.tm?[seat,(seat+2)%4]:[seat]).every(q=>S.pc[q].every(x=>x===56))){S.st='over';S.win=seat;S.msg=S.tm?'Баг ялалаа!':nm+' ялалаа!';pub();return}
   let m=nm+': '+v+' нүүлээ';
   if(cap){S.bn=true;m=nm+' хөл идлээ! Дахин шидэнэ'}
   else if(blk)m=nm+': бамбай хамгаалж, хөл идэгдсэнгүй'; 
-  got.forEach(w=>{m+=w==='e'?' · +1 нүдэнд зогсов, дахин шидэнэ':' · '+SKN[w]+' авлаа'});if(full)m+=' · ур чадварын хайрцаг дүүрсэн (3)';
+  got.forEach(w=>{m+=w==='e'?' · +1 нүдэнд зогсов, дахин шидэнэ':' · '+SKN[w]+' авлаа'});
   if(np===56){S.bn=true;m+=' · гэртээ орлоо, дахин шидэнэ'}
   else if(S.bn&&!cap&&S.dd.includes(6))m+=' · 6 буусан тул дахин шидэнэ';
   S.msg=m;
@@ -492,7 +492,7 @@ function renderGame(){
   if(playing&&m>=0&&pend==='c'&&myTurn)$('#sk').insertAdjacentHTML('beforeend','<div class="pick">'+[1,2,3,4,5,6].map(v=>`<button data-v="${v}">${v}</button>`).join('')+'</div>');
   document.querySelectorAll('.pick button').forEach(b=>b.onclick=()=>{act({k:'skill',s:'c',v:+b.dataset.v});pend=null});
   document.querySelectorAll('#sk>button').forEach(b=>b.onclick=()=>{const k=b.dataset.k;if(k==='r'||k==='b'){act({k:'skill',s:k})}else{pend=pend===k?null:k;renderGame()}});
-  $('#end').innerHTML=playing?`<p class="note">Самбар дээр төрөл бүр 2-2 тэмдэг гарна. Хөлөөрөө тэр нүдэн дээр буух эсвэл дайран өнгөрвөл авна (3 хүртэл хадгална, дүүрвэл авахгүй). Нүүдэл сонгох: 1-6 дотроос хүссэн нүүдлээ сонгоно. Бүрэн бамбай: бүх хөлийг нэг тойрог хамгаална. Нэмэлт шоо: хоёр дахь шоо нэмнэ. Ногоон +1 нүдэнд яг зогсвол шууд дахин шидэнэ. 2v2: 4 хөлөө оруулсны дараа хамтрагчийнхаа хөлийг нүүлгэнэ. Нэг ээлжид 10 секунд, хугацаа хэтэрвэл автоматаар нүүнэ. 6 буусан, хөл идсэн, гэртээ орсон бол дахин шидэнэ.</p>`:S.st==='over'?(isHost?'<div class="row"><button id="again">Дахин тоглох</button><button class="alt" id="quit">Гарах</button></div>':'<p>Хост дахин эхлүүлэхийг хүлээж байна…</p>'):'';
+  $('#end').innerHTML=playing?`<p class="note">Самбар дээр ур чадварын тэмдэг 2-2, ногоон +1 нь 4 ширхэг гарна. Хөлөөрөө тэр нүдэн дээр буух эсвэл дайран өнгөрвөл авна (хэдэн ч хадгалж болно). Нүүдэл сонгох: 1-6 дотроос хүссэн нүүдлээ сонгоно. Бүрэн бамбай: бүх хөлийг нэг тойрог хамгаална. Нэмэлт шоо: хоёр дахь шоо нэмнэ. Ногоон +1 нүдэнд яг зогсвол шууд дахин шидэнэ. 2v2: 4 хөлөө оруулсны дараа хамтрагчийнхаа хөлийг нүүлгэнэ. Нэг ээлжид 10 секунд, хугацаа хэтэрвэл автоматаар нүүнэ. 6 буусан, хөл идсэн, гэртээ орсон бол дахин шидэнэ.</p>`:S.st==='over'?(isHost?'<div class="row"><button id="again">Дахин тоглох</button><button class="alt" id="quit">Гарах</button></div>':'<p>Хост дахин эхлүүлэхийг хүлээж байна…</p>'):'';
   if(S.st==='over'){if($('#again'))$('#again').onclick=()=>{S.seats.forEach(x=>{if(x.t==='off')x.t='empty'});startGame()};if($('#quit'))$('#quit').onclick=()=>location.reload()}
 }
 setInterval(()=>{const b=$('#tb');if(!b)return;if(!localDl||!S||S.st!=='play'){b.style.width='0';return}
